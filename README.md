@@ -4,7 +4,6 @@
 
  TO COMPILE TYPE:
    make
-   
    gcc test.c -o test libasm.a -O2 -Wall
  
 
