@@ -1,46 +1,39 @@
 //-------------------------------------------------------------------
 //
-// Micro Assembler JIT:
-//   Simple Test.
-//
-// FILE:
-//   test.c
+// Micro Assembler, Simple Example:
 //
 // COMPILE:
-//   gcc test.c -o test libasm.a -O2 -Wall
+//   gcc -c src/asm.c -Wall
+//   gcc test.c -o test asm.o -Wall
 //
 //-------------------------------------------------------------------
 //
 #include "src/asm.h"
 
-int var_a = 100;
-
-void Hello (void) {
-    printf ("\nFunction: Hello World\n\n");
+void hello (void) {
+    printf ("\nFUNCTION: Hello World\n\n");
 }
 
 int main (int argc, char **argv) {
     ASM *a;
 
-    if ((a = asm_new (100)) == NULL)
+    if ((a = asm_new(100))==NULL)
   return -1;
 
-    //-----------------------
-    //
-    emit_begin (a);
-    emit_incl (a, &var_a);
-    emit_end (a);
-    //
-    //-----------------------
+    emit_begin(a);
+    emit_call (a, hello);
+    emit_end  (a);
 
-    printf ("var_a: %d\n", var_a);
-
-    if (SetExecutable (a, asm_get_len(a)) == 0) {
-        Run (a);
+    if (asm_set_executable(a)==0) {
+        Run_JIT(a);
     }
-    else printf ("ERRO: %s\n", ErroGet());
+    else {
+        printf ("Erro: %s\n", ErroGet());
+        return -1;
+    }
 
-    printf ("Exiting With Sucess | var_a: %d\n", var_a);
+    printf ("Exiting With Sucess !!!\n");
 
     return 0;
 }
+
