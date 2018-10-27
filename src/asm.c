@@ -3,9 +3,9 @@
 // THANKS TO:
 // ----------------------------------------------
 //
-//   01: God the creator of the heavens and the earth in the name of Jesus Christ.
+//   01 : God the creator of the heavens and the earth in the name of Jesus Christ.
 //
-//   02 - Fabrice Bellard: www.bellard.org
+//   02 : Fabrice Bellard: www.bellard.org
 //
 // ----------------------------------------------
 //
@@ -246,6 +246,25 @@ void emit_sub_esp (ASM *a, char c) { // 32/64 BITS OK
     #endif
 }
 
+void emit_mov_value_reg (ASM *a, long value, int reg) { // mov  $1000, %eax
+    if (reg >= 0 && reg <= 7) {
+        switch (reg) {
+        case EAX: g(a,0xb8); break; // b8   e8 03 00 00   | mov  $0x3e8, %eax
+        case ECX: g(a,0xb9); break; // b9   64 00 00 00   | mov  $0x64, %ecx
+        case EDX: g(a,0xba); break; // ba   64 00 00 00   | mov  $0x64, %edx
+        case EBX: g(a,0xbb); break; // bb   64 00 00 00   | mov  $0x64, %ebx
+        //
+        case ESI: g(a,0xbe); break; // be   e8 03 00 00   | mov  $0x3e8, %esi
+        case EDI: g(a,0xbf); break; // bf   e8 03 00 00   | mov  $0x3e8, %edi
+        default:
+            Erro ("emit_mov_value_reg(...); Valid Register: EAX, ECX, EDX, EBX, ESI, EDI\n");
+            return;
+        }
+        *(long*)a->p = value;
+        a->p += 4;
+    }
+}
+
 void emit_mov_var_reg (ASM *a, void *var, int reg) { // 32/64 BITS OK: Move variable to %register
     if (reg >= 0 && reg <= 7) {
         #if defined(__x86_64__)
@@ -298,6 +317,62 @@ void emit_mov_reg_var (ASM *a, int reg, void *var) { // 32/64 BITS OK: Move %reg
         #endif
         asm_get_addr (a, var);
     }
+}
+
+void emit_movl_ESP (ASM *a, long value, char c) { // movl  $1000, 4(%esp)
+    #if defined(__x86_64__)
+    // 64 bits:
+    // 67 c7 44 24    04   d0 07 00 00  | movl  $0x7d0, 0x4(%esp)
+    g4(a,0x67,0xc7,0x44,0x24); g(a,(char)c);
+    *(long*)a->p = value;
+    a->p += 4;
+    #else
+    // 32 bits:
+    // c7 44 24   04    d0 07 00 00	  movl   $0x7d0,  0x4(%esp)
+    g3(a,0xc7,0x44,0x24); g(a,(char)c);
+    *(long*)a->p = value;
+    a->p += 4;
+    #endif
+}
+
+void emit_movl_var (ASM *a, long value, void *var) {
+    #if defined(__x86_64__)
+    // 64 bits
+    // c7 04 25     30 70 40 00     dc 05 00 00  	movl   $0x5dc,0x407030
+    g3(a,0xc7,0x04,0x25);
+    #else
+    // 32 bits
+    // c7 05    20 50 40 00    dc 05 00 00 	movl   $0x5dc,0x405020
+    g2(a,0xc7,0x05);
+    #endif
+    asm_get_addr(a,var);
+    *(long*)a->p = value;
+    a->p += 4;
+}
+
+void emit_function_arg1_value (ASM *a, long value, int pos) {
+#if defined(__x86_64__)
+    #ifdef WIN32
+    emit_mov_value_reg (a, value, ECX);
+    #endif
+    #ifdef __linux__
+    emit_mov_value_reg (a, value, EDI);
+    #endif
+#else
+    emit_movl_ESP (a, value, 0);
+#endif
+}
+void emit_function_arg2_value (ASM *a, long value, int pos) {
+#if defined(__x86_64__)
+    #ifdef WIN32
+    emit_mov_value_reg (a, value, EDX);
+    #endif
+    #ifdef __linux__
+    emit_mov_value_reg (a, value, ESI);
+    #endif
+#else
+    emit_movl_ESP (a, value, pos);
+#endif
 }
 
 void emit_call (ASM *a, void *func) {
