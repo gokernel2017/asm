@@ -25,5 +25,9 @@
    gcc src/simple.c -o simple asm.o -m64 -Wall
 
 
+ TO TEST SIMPLE LANGUAGE:
+   simple test.asm
+
+
  BY: Francisco - gokernel@hotmail.com
 
