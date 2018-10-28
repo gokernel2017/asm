@@ -64,7 +64,7 @@ struct TFunc {
     UCHAR   *code;    // the function on JIT MODE | or VM in VM MODE
     int     type;     // FUNC_TYPE_NATIVE_C = 0, FUNC_TYPE_COMPILED, FUNC_TYPE_MODULE
     int     len;
-    int     sub;  // used only in dynamic modules: .dll | .so
+    int     sub;      // used only in dynamic modules: .dll | .so
     TFunc   *next;
 };
 

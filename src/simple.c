@@ -24,13 +24,13 @@
 //   gcc -c src/asm.c -m64 -Wall
 //   gcc src/simple.c -o simple asm.o -m64 -Wall
 //
+//
 // BY: Francisco - gokernel@hotmail.com
 //
 //-------------------------------------------------------------------
 //
 #include "simple.h"
 
-typedef struct ARG ARG;
 struct ARG {
     char  *string;
     char  text [50][50];
@@ -45,6 +45,7 @@ struct DEFINE {
 static char *reg[] = { "%eax", "%ecx", "%edx", "%ebx", "%esp", "%ebp", "%esi", "%edi", NULL };
 
 TVar Gvar [GVAR_SIZE];
+
 char  *str;
 
 static int
@@ -152,9 +153,8 @@ void Assemble (ASM *a, char *text) {
   return;
     }
 
-    if (ifndef_true == 1) {
+    if (ifndef_true == 1)
   return;
-    }
 
     if (arg.tok[0]==TOK_PRE && arg.count==2 && !strcmp(arg.text[0], "#ifdef")) {
         proc_ifdef (arg.text[1]);
@@ -176,6 +176,10 @@ void Assemble (ASM *a, char *text) {
   return;
     }
 
+    //-------------------------------------------
+    // Assembly Opcode:
+    //-------------------------------------------
+    //
     if (!strcmp(arg.text[0], "mov")) {
         op_mov (a);
     }
@@ -187,20 +191,35 @@ void Assemble (ASM *a, char *text) {
 }
 
 static void execute_call (ASM *a, TFunc *func) {
-    int count, i = 0, pos = 0, size = 4;
+    int count, i = 0, pos = 0, size = 4, var;
 
     for (count = 1; count < arg.count; count++) {
 
         if (arg.tok[count]==TOK_NUMBER) {
             if (i==0) {
-                emit_function_arg1_value (a, atoi(arg.text[count]), 0);
+                emit_function_arg1_long (a, atoi(arg.text[count]), 0);
             }
             else if (i==1) {
-                emit_function_arg2_value (a, atoi(arg.text[count]), pos);
+                emit_function_arg2_long (a, atoi(arg.text[count]), pos);
             }
             i++;
             pos += size;
+            continue;
         }// if (arg.tok[count]==TOK_NUMBER)
+
+        if ((var = VarFind(arg.text[count])) != -1) {
+            if (Gvar[var].type != TYPE_FLOAT) {
+                if (i==0) {
+                    emit_function_arg1_var (a, &Gvar[var].value.l, 0);
+                }
+                else if (i==1) {
+                    emit_function_arg2_var (a, &Gvar[var].value.l, pos);
+                }
+                i++;
+                pos += size;
+                continue;
+            }
+        }
     }
     
     if (func->type==FUNC_TYPE_NATIVE_C) {
@@ -221,16 +240,25 @@ void proc_ifdef (char *name) {
     ifndef_true = 1;
 }
 
+//-------------------------------------------------------------------
 //
-// mov $ 1000 , a
+// mov  $ 1000 , var
+// mov  $ 1000 , %eax
+// mov  %eax , var
+// mov  var , %eax
 //
+//-------------------------------------------------------------------
 void op_mov (ASM *a) {
     int i;
-    // mov $ 1000 , a
+    // mov $ 1000 , var
     // mov $ 1000 , %eax
     if (arg.count==5) {
-        if (*arg.text[1]=='$' && arg.tok[2]==TOK_NUMBER && arg.tok[3]==',') {
+        if (arg.tok[1]=='$' && arg.tok[2]==TOK_NUMBER && arg.tok[3]==',') {
             if (*arg.text[4]=='%') {
+                if ((i = RegFind(arg.text[4])) != -1) {
+                    emit_mov_value_reg (a, atoi(arg.text[2]), i);
+                    return;
+                }
             } else {
                 if ((i = VarFind(arg.text[4])) != -1) {
                     emit_movl_var (a, atoi(arg.text[2]), &Gvar[i].value.l);
@@ -241,21 +269,46 @@ void op_mov (ASM *a) {
                 }
             }
         }
-    }
+    }// if (arg.count==5)
+
+    // mov %eax , var
+    // mov var , %eax
+    if (arg.count==4) {
+        int var;
+        // mov %eax , var
+        if (*arg.text[1]=='%') {
+            if ((i = RegFind(arg.text[1])) != -1 && arg.tok[2]==',') {
+                if ((var = VarFind(arg.text[3])) != -1) {
+                    emit_mov_reg_var(a, i, &Gvar[var].value.l);
+                    return;
+                }
+            }
+        }
+        // mov var , %eax
+        if ((var = VarFind(arg.text[1])) != -1 && arg.tok[2]==',') {
+            if ((i = RegFind(arg.text[3])) != -1) {
+                emit_mov_var_reg(a, &Gvar[var].value.l, i);
+                return;
+            }
+        }
+    }// if (arg.count==4)
+
     Erro ("%d: '%s'\n", line, arg.string);
 }
 
 void op_sub (ASM *a) {
     //
-    // sub    $ 0x8 , %esp
+    // sub    $ 8 , %esp
     //
     if (arg.count==5) {
-        if (*arg.text[1]=='$' && arg.tok[2]==TOK_NUMBER && arg.tok[3]==',') {
+        if (arg.tok[1]=='$' && arg.tok[2]==TOK_NUMBER && arg.tok[3]==',') {
             if (!strcmp(arg.text[4], "%esp")) {
                 emit_sub_esp (a, atoi(arg.text[2]));
+                return;
             }
         }
     }
+    Erro ("%d: '%s'\n", line, arg.string);
 }
 
 static void store_arg (char *text) {
@@ -269,20 +322,12 @@ static void store_arg (char *text) {
 void Execute (ASM *a, char *FileName) {
     FILE *fp;
     if ((fp = fopen(FileName, "rb")) != NULL) {
-        char buf [255], *p;
-        p = buf; *p = 0; //<<<<<<< set/reset
+        char buf [255];
+
         emit_begin (a);
-        while ((*p = getc(fp)) != EOF) {
-            if (*p=='\n') {
-                p--; *p = 0;
-                line++;
-                if (*buf) {
-                    Assemble (a, buf);
-                    if (erro) break;
-                }
-                p = buf; *p = 0; //<<<<<<< set/reset
-            }
-            else p++;
+        while (fgets(buf, sizeof(buf), fp) != NULL) {
+            Assemble (a, buf);
+            if (erro) break;
         }
         emit_end (a);
         fclose(fp);
@@ -373,8 +418,13 @@ void lib_hello (void) {
 
 void lib_version (void) {
     printf ("\n---------------------------");
+    #if defined(__x86_64__)
+    printf ("\nSimple Language (64 BITS):\n");
+    #else
+    printf ("\nSimple Language (32 BITS):\n");
+    #endif
     printf (
-        "\nSimple Language:\n  ASM Version: %d.%d.%d\n",
+        "  ASM Version: %d.%d.%d\n",
         ASM_VERSION, ASM_VERSION_SUB, ASM_VERSION_PATCH
     );
     printf ("---------------------------\n");

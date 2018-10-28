@@ -112,6 +112,33 @@ int asm_get_len (ASM *a) {
     return (a->p - a->code);
 }
 
+void asm_label (ASM *a, char *name) {
+    if (name) {
+        ASM_label *lab;
+        ASM_label *l = a->label;
+
+        // find if exist:
+        while (l) {
+            if (!strcmp(l->name, name)) {
+                printf ("Label Exist: '%s'\n", l->name);
+                return;
+            }
+            l = l->next;
+        }
+
+        if ((lab = (ASM_label*)malloc (sizeof(ASM_label))) != NULL) {
+
+            lab->name = strdup (name);
+            lab->pos  = (a->p - a->code); // the index
+
+            // add on top:
+            lab->next = a->label;
+            a->label = lab;
+        }
+    }
+}
+
+
 int Set_Executable (void *ptr, unsigned int size) {
 
     if (ErroGet()) return 1;
@@ -266,57 +293,65 @@ void emit_mov_value_reg (ASM *a, long value, int reg) { // mov  $1000, %eax
 }
 
 void emit_mov_var_reg (ASM *a, void *var, int reg) { // 32/64 BITS OK: Move variable to %register
-    if (reg >= 0 && reg <= 7) {
-        #if defined(__x86_64__)
-        switch (reg) {
-        case EAX: g3(a,0x8b,0x04,0x25); break; // 8b 04 25   00 0a 60 00 	mov    0x600a00,%eax
-        case ECX: g3(a,0x8b,0x0c,0x25); break; // 8b 0c 25   00 0a 60 00 	mov    0x600a00,%ecx
-        case EDX: g3(a,0x8b,0x14,0x25); break; // 8b 14 25   00 0a 60 00 	mov    0x600a00,%edx
-        case EBX: g3(a,0x8b,0x1c,0x25); break; // 8b 1c 25   00 0a 60 00 	mov    0x600a00,%ebx
-        default:
-            Erro ("emit_mov_var_reg(...); Valid Register: EAX, ECX, EDX, EBX\n");
-            return;
-        }
-        #else
-        switch (reg) {
-        case EAX: g(a,0xa1);       break; // a1       60 40 40 00   mov   0x404060, %eax
-        case ECX: g2(a,0x8b,0x0d); break;	// 8b 0d    70 40 40 00   mov   0x404070, %ecx
-        case EDX: g2(a,0x8b,0x15); break; // 8b 15    70 40 40 00   mov   0x404070, %edx
-        case EBX: g2(a,0x8b,0x1d); break; // 8b 1d    60 40 40 00   mov   0x404060, %ebx
-        default:
-            Erro ("emit_mov_var_reg(...); Valid Register: EAX, ECX, EDX, EBX\n");
-            return;
-        }
-        #endif
-        asm_get_addr (a, var);
+#if defined(__x86_64__)
+    switch (reg) {
+    case EAX: g3(a,0x8b,0x04,0x25); break; // 8b 04 25  00 0a 60 00 	mov  0x600a00, %eax
+    case ECX: g3(a,0x8b,0x0c,0x25); break; // 8b 0c 25  00 0a 60 00 	mov  0x600a00, %ecx
+    case EDX: g3(a,0x8b,0x14,0x25); break; // 8b 14 25  00 0a 60 00 	mov  0x600a00, %edx
+    case EBX: g3(a,0x8b,0x1c,0x25); break; // 8b 1c 25  00 0a 60 00 	mov  0x600a00, %ebx
+    //
+    case ESI: g3(a,0x8b,0x34,0x25); break; // 8b 34 25  24 7a 40 00   mov  0x407a24, %esi
+    case EDI: g3(a,0x8b,0x3c,0x25); break; // 8b 3c 25  20 7a 40 00 	mov  0x407a20, %edi
+    default:
+        Erro ("emit_mov_var_reg(...); Valid Register: EAX, ECX, EDX, EBX, ESI, EDI\n");
+        return;
     }
+#else
+    switch (reg) {
+    case EAX: g(a,0xa1);       break; // a1       60 40 40 00   mov   0x404060, %eax
+    case ECX: g2(a,0x8b,0x0d); break;	// 8b 0d    70 40 40 00   mov   0x404070, %ecx
+    case EDX: g2(a,0x8b,0x15); break; // 8b 15    70 40 40 00   mov   0x404070, %edx
+    case EBX: g2(a,0x8b,0x1d); break; // 8b 1d    60 40 40 00   mov   0x404060, %ebx
+    //
+    case ESI: g2(a,0x8b,0x35); break; // 8b 35    30 54 40 00   mov   0x405430, %esi
+    case EDI: g2(a,0x8b,0x3d); break; // 8b 3d    34 54 40 00   mov   0x405434, %edi
+    default:
+        Erro ("emit_mov_var_reg(...); Valid Register: EAX, ECX, EDX, EBX, ESI, EDI\n");
+        return;
+    }
+#endif
+    asm_get_addr (a, var);
 }
 
 void emit_mov_reg_var (ASM *a, int reg, void *var) { // 32/64 BITS OK: Move %register to variable
-    if (reg >= 0 && reg <= 7) {
-        #if defined(__x86_64__)
-        switch (reg) {
-        case EAX: g3(a, 0x89, 0x04, 0x25);  break; // 89 04 25    28 0b 60 00 	mov  %eax, 0x600b28
-        case ECX: g3(a, 0x89, 0x0c, 0x25);  break; // 89 0c 25    28 0b 60 00 	mov  %ecx, 0x600b28
-        case EDX: g3(a, 0x89, 0x14, 0x25);  break; // 89 14 25    28 0b 60 00 	mov  %edx, 0x600b28
-        case EBX: g3(a, 0x89, 0x1c, 0x25);  break; // 89 1c 25    28 0b 60 00 	mov  %ebx, 0x600b28
-        default:
-            Erro ("emit_mov_reg_var(...); Valid Register: EAX, ECX, EDX, EBX\n");
-            return;
-        }
-        #else
-        switch (reg) {
-        case EAX: g(a,0xa3);       break; // a3       10 40 40 00   mov   %eax, 0x404010
-        case ECX: g2(a,0x89,0x0d); break; // 89 0d    60 40 40 00   mov   %ecx, 0x404060
-        case EDX: g2(a,0x89,0x15); break; // 89 15    60 40 40 00   mov   %edx, 0x404060
-        case EBX: g2(a,0x89,0x1d); break;//  89 1d    60 40 40 00   mov   %ebx, 0x404060
-        default:
-            Erro ("emit_mov_reg_var(...); Valid Register: EAX, ECX, EDX, EBX\n");
-            return;
-        }
-        #endif
-        asm_get_addr (a, var);
+#if defined(__x86_64__)
+    switch (reg) {
+    case EAX: g3(a,0x89,0x04,0x25); break; // 89 04 25    28 0b 60 00 	mov    %eax, 0x600b28
+    case ECX: g3(a,0x89,0x0c,0x25); break; // 89 0c 25    28 0b 60 00 	mov    %ecx, 0x600b28
+    case EDX: g3(a,0x89,0x14,0x25); break; // 89 14 25    28 0b 60 00 	mov    %edx, 0x600b28
+    case EBX: g3(a,0x89,0x1c,0x25); break; // 89 1c 25    28 0b 60 00 	mov    %ebx, 0x600b28
+    //
+    case ESI: g3(a,0x89,0x34,0x25); break; // 89 34 25    24 7a 40 00 	mov    %esi, 0x407a24
+    case EDI: g3(a,0x89,0x3c,0x25); break; // 89 3c 25    20 7a 40 00 	mov    %edi, 0x407a20
+    default:
+        Erro ("emit_mov_reg_var(...); Valid Register: EAX, ECX, EDX, EBX, ESI, EDI\n");
+        return;
     }
+#else
+    switch (reg) {
+    case EAX: g(a,0xa3);       break; // a3       10 40 40 00   mov   %eax, 0x404010
+    case ECX: g2(a,0x89,0x0d); break; // 89 0d    60 40 40 00   mov   %ecx, 0x404060
+    case EDX: g2(a,0x89,0x15); break; // 89 15    60 40 40 00   mov   %edx, 0x404060
+    case EBX: g2(a,0x89,0x1d); break; // 89 1d    60 40 40 00   mov   %ebx, 0x404060
+    //
+    case ESI: g2(a,0x89,0x35); break; // 89 35    30 54 40 00   mov   %esi, 0x405430
+    case EDI: g2(a,0x89,0x3d); break; // 89 3d    34 54 40 00   mov   %edi, 0x405434
+    default:
+        Erro ("emit_mov_reg_var(...); Valid Register: EAX, ECX, EDX, EBX, ESI, EDI\n");
+        return;
+    }
+#endif
+    asm_get_addr (a, var);
 }
 
 void emit_movl_ESP (ASM *a, long value, char c) { // movl  $1000, 4(%esp)
@@ -335,6 +370,14 @@ void emit_movl_ESP (ASM *a, long value, char c) { // movl  $1000, 4(%esp)
     #endif
 }
 
+void emit_mov_eax_ESP (ASM *a, UCHAR index) {
+    #if defined(__x86_64__)
+    g5 (a,0x67,0x89,0x44,0x24, (UCHAR)index); // 67 89 44 24    04    mov   %eax, 4(%esp)
+    #else
+    g4 (a,0x89,0x44,0x24, (UCHAR)index); // 89 44 24     04    mov    %eax,0x4(%esp)
+    #endif
+}
+
 void emit_movl_var (ASM *a, long value, void *var) {
     #if defined(__x86_64__)
     // 64 bits
@@ -350,7 +393,7 @@ void emit_movl_var (ASM *a, long value, void *var) {
     a->p += 4;
 }
 
-void emit_function_arg1_value (ASM *a, long value, int pos) {
+void emit_function_arg1_long (ASM *a, long value, int pos) {
 #if defined(__x86_64__)
     #ifdef WIN32
     emit_mov_value_reg (a, value, ECX);
@@ -362,7 +405,7 @@ void emit_function_arg1_value (ASM *a, long value, int pos) {
     emit_movl_ESP (a, value, 0);
 #endif
 }
-void emit_function_arg2_value (ASM *a, long value, int pos) {
+void emit_function_arg2_long (ASM *a, long value, int pos) {
 #if defined(__x86_64__)
     #ifdef WIN32
     emit_mov_value_reg (a, value, EDX);
@@ -372,6 +415,34 @@ void emit_function_arg2_value (ASM *a, long value, int pos) {
     #endif
 #else
     emit_movl_ESP (a, value, pos);
+#endif
+}
+
+void emit_function_arg1_var (ASM *a, void *var, int pos) {
+#if defined(__x86_64__)
+    #ifdef WIN32
+    emit_mov_var_reg (a, var, ECX);
+    #endif
+    #ifdef __linux__
+    emit_mov_var_reg (a, var, EDI);
+    #endif
+#else
+    emit_mov_var_reg (a, var, EAX);
+    emit_mov_eax_ESP (a, 0);
+#endif
+}
+
+void emit_function_arg2_var (ASM *a, void *var, int pos) {
+#if defined(__x86_64__)
+    #ifdef WIN32
+    emit_mov_var_reg (a, var, EDX);
+    #endif
+    #ifdef __linux__
+    emit_mov_var_reg (a, var, ESI);
+    #endif
+#else
+    emit_mov_var_reg (a, var, EAX);
+    emit_mov_eax_ESP (a, pos);
 #endif
 }
 
@@ -398,30 +469,8 @@ void emit_call_direct (ASM *a, void *func) {
     a->p += 4;
 }
 
-void asm_label (ASM *a, char *name) {
-    if (name) {
-        ASM_label *lab;
-        ASM_label *l = a->label;
-
-        // find if exist:
-        while (l) {
-            if (!strcmp(l->name, name)) {
-                printf ("Label Exist: '%s'\n", l->name);
-                return;
-            }
-            l = l->next;
-        }
-
-        if ((lab = (ASM_label*)malloc (sizeof(ASM_label))) != NULL) {
-
-            lab->name = strdup (name);
-            lab->pos  = (a->p - a->code); // the index
-
-            // add on top:
-            lab->next = a->label;
-            a->label = lab;
-        }
-    }
+void emit_cmp_eax_ebx (ASM *a) {
+    g2(a,0x39,0xc3);   // 39 c3   cmp   %eax, %ebx
 }
 
 void emit_jump_jmp (ASM *a, char *name) {

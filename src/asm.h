@@ -120,14 +120,17 @@ LIBIMPORT void    ErroReset           (void);
 //
 LIBIMPORT void emit_begin         (ASM *a);
 LIBIMPORT void emit_end           (ASM *a);
-LIBIMPORT void emit_sub_esp       (ASM *a, char c);                 // sub  $32, %esp | sub  $32, %rsp
-LIBIMPORT void emit_movl_ESP      (ASM *a, long value, char c);     // movl  $1000, 4(%esp)
-LIBIMPORT void emit_mov_value_reg (ASM *a, long value, int reg);    // mov  $1000, %eax
-LIBIMPORT void emit_mov_var_reg   (ASM *a, void *var, int reg);     // move variable to %register
-LIBIMPORT void emit_mov_reg_var   (ASM *a, int reg, void *var);     // move %register to variable
-LIBIMPORT void emit_movl_var      (ASM *a, long value, void *var);  // movl  $1500, var
+LIBIMPORT void emit_sub_esp       (ASM *a, char c);                 // sub    $32, %esp | sub  $32, %rsp
+LIBIMPORT void emit_movl_ESP      (ASM *a, long value, char c);     // movl   $1000, 4(%esp)
+LIBIMPORT void emit_mov_eax_ESP   (ASM *a, UCHAR index);            // mov    %eax, 4(%esp)
+LIBIMPORT void emit_mov_value_reg (ASM *a, long value, int reg);    // mov    $1000, %eax
+LIBIMPORT void emit_mov_var_reg   (ASM *a, void *var, int reg);     // move   variable to %register
+LIBIMPORT void emit_mov_reg_var   (ASM *a, int reg, void *var);     // move   %register to variable
+LIBIMPORT void emit_movl_var      (ASM *a, long value, void *var);  // movl   $1500, var
 LIBIMPORT void emit_call          (ASM *a, void *func);
 LIBIMPORT void emit_call_direct   (ASM *a, void *func);
+//
+LIBIMPORT void emit_cmp_eax_ebx   (ASM *a); // cmp  %eax, %ebx
 // jump:
 LIBIMPORT void emit_jump_jmp      (ASM *a, char *name);
 LIBIMPORT void emit_jump_je       (ASM *a, char *name);
@@ -137,10 +140,13 @@ LIBIMPORT void emit_jump_jge      (ASM *a, char *name);
 LIBIMPORT void emit_jump_jg       (ASM *a, char *name);
 LIBIMPORT void emit_jump_jl       (ASM *a, char *name);
 //
-// Function  Call Argument:
+// Function Call Argument:
 //
-LIBIMPORT void emit_function_arg1_value (ASM *a, long value, int pos);
-LIBIMPORT void emit_function_arg2_value (ASM *a, long value, int pos);
+LIBIMPORT void emit_function_arg1_long  (ASM *a, long value, int pos);
+LIBIMPORT void emit_function_arg2_long  (ASM *a, long value, int pos);
+//
+LIBIMPORT void emit_function_arg1_var   (ASM *a, void *var, int pos);
+LIBIMPORT void emit_function_arg2_var   (ASM *a, void *var, int pos);
 
 #ifdef __cplusplus
 }

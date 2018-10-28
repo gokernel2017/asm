@@ -1,0 +1,36 @@
+
+ ________________________________________________
+
+ Simple Assembler Language Documentation:
+ ________________________________________________
+
+
+Opcode LONG:
+-------------------------------------------------
+
+ Create a variable type long.
+   long   var_name
+
+
+Opcode MOV:
+-------------------------------------------------
+
+  Move value to variable:
+    mov   $1000, var
+
+  Move value to register ( %eax, %ecx, %edx, %ebx, %esi, %edi ):
+    mov   $1000, %eax
+
+  Move variable to register ( %eax, %ecx, %edx, %ebx, %esi, %edi ):
+    mov   var, %eax
+
+  Move register ( %eax, %ecx, %edx, %ebx, %esi, %edi ) to variable:
+    mov   %eax, var
+
+
+Opcode SUB:
+-------------------------------------------------
+
+ Sub register ( %esp )
+   sub    $8, %esp
+
