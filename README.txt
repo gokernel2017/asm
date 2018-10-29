@@ -12,7 +12,7 @@
 
  TO COMPILE TYPE:
    make
-   gcc test.c -o test libasm.a -O2 -Wall
+   gcc test.c -o test libasm.a -Wall
 
 
  TO COMPILE THE SIMPLE LANGUAGE 32 BITS:
