@@ -34,7 +34,6 @@ enum {
 enum {
     FUNC_TYPE_NATIVE_C = 0,
     FUNC_TYPE_COMPILED,
-    FUNC_TYPE_VM,
     FUNC_TYPE_MODULE     // .dll | .so
 };
 

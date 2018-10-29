@@ -102,9 +102,11 @@ OPCODE MOV_EAX_ECX [2]; // mov   %eax, %ecx
 //-------------------------------------------------------------------
 //
 LIBIMPORT ASM   * asm_new             (unsigned int size);
+LIBIMPORT void    asm_reset           (ASM *a);
 LIBIMPORT int     asm_set_executable  (ASM *a);
 LIBIMPORT void    asm_get_addr        (ASM *a, void *ptr);
 LIBIMPORT int     asm_get_len         (ASM *a);
+LIBIMPORT void    asm_code_copy       (ASM *src, UCHAR *dest, unsigned int len);
 LIBIMPORT void    asm_label           (ASM *a, char *name);
 //
 LIBIMPORT void    Emit                (ASM *a, const UCHAR opcode[], unsigned int len);

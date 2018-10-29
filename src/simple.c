@@ -29,6 +29,14 @@
 //
 //-------------------------------------------------------------------
 //
+#ifdef WIN32
+    #include <windows.h>
+#endif
+#ifdef __linux__
+    #include <unistd.h>
+    #include <sys/mman.h> // mprotect()
+#endif
+
 #include "simple.h"
 
 struct ARG {
@@ -42,22 +50,33 @@ struct DEFINE {
     struct DEFINE *next;
 }*Gdefine;
 
+FILE  * fp = NULL;
+ASM   * asm_function = NULL;
+TFunc * Gfunc = NULL;  // store the user functions
+
 static char *reg[] = { "%eax", "%ecx", "%edx", "%ebx", "%esp", "%ebp", "%esi", "%edi", NULL };
 
 TVar Gvar [GVAR_SIZE];
 
 char  *str;
+char  func_name [100];
 
 static int
     line,
     count,
+    is_function,
     ifndef_true
     ;
 
+//-----------------------------------------------
+//-----------------  PROTOTYPES  ----------------
+//-----------------------------------------------
+//
 void op_mov (ASM *a);
 void op_sub (ASM *a);
 //
 static void execute_call  (ASM *a, TFunc *func);
+static void proc_function (void);
 static void store_arg     (char *text);
 static void DefineAdd     (char *name);
 static void proc_ifdef    (char *name);
@@ -92,7 +111,7 @@ top:
 
     //##########  WORD, IDENTIFIER ...  #########
     //
-    if ((*str >= 'a' && *str <= 'z') || *str == '%' || *str == '_' || *str == '#') {
+    if ((*str >= 'a' && *str <= 'z') || (*str >= 'A' && *str <= 'Z') || *str == '%' || *str == '_' || *str == '#') {
         if (*str=='#') pre = 1;
         *p++ = *str++;
         while ((*str >= 'a' && *str <= 'z') || (*str >= 'A' && *str <= 'Z') || (*str >= '0' && *str <= '9') || *str=='_') {
@@ -166,8 +185,24 @@ void Assemble (ASM *a, char *text) {
   return;
     }
 
-    if (arg.count==2 && !strcmp(arg.text[0], "long")) {
-        CreateVarLong (arg.text[1], 0);
+    //-------------------------------------------
+    // long var
+    // function hello_world
+    //-------------------------------------------
+    //
+    if (arg.count==2) {
+        if (!strcmp(arg.text[0], "long")) {
+            CreateVarLong (arg.text[1], 0);
+            return;
+        }
+        if (!strcmp(arg.text[0], "function")) {
+            is_function = 1;
+            proc_function ();
+            return;
+        }
+    }
+    if (is_function==1 && !strcmp(arg.text[0], "end")) {
+        is_function = 0;
   return;
     }
 
@@ -186,7 +221,7 @@ void Assemble (ASM *a, char *text) {
     else if (!strcmp(arg.text[0], "sub")) {
         op_sub(a);
     } else {
-        Erro ("%d : Ilegal Identifier: '%s'\n",line, arg.string);
+        Erro ("%d : Assemble Ilegal Identifier: '%s'\n",line, arg.string);
     }
 }
 
@@ -222,10 +257,12 @@ static void execute_call (ASM *a, TFunc *func) {
         }
     }
     
-    if (func->type==FUNC_TYPE_NATIVE_C) {
-        emit_call (a, func->code);
-    } else {
+    // emit_call (a, func->code);
+
+    if (func->type==FUNC_TYPE_MODULE) {
         emit_call_direct (a, func->code);
+    } else {
+        emit_call (a, func->code);
     }
 }
 
@@ -299,10 +336,11 @@ void op_mov (ASM *a) {
 void op_sub (ASM *a) {
     //
     // sub    $ 8 , %esp
+    // sub    $ 8 , %rsp
     //
     if (arg.count==5) {
         if (arg.tok[1]=='$' && arg.tok[2]==TOK_NUMBER && arg.tok[3]==',') {
-            if (!strcmp(arg.text[4], "%esp")) {
+            if (!strcmp(arg.text[4], "%esp") || !strcmp(arg.text[4], "%rsp")) {
                 emit_sub_esp (a, atoi(arg.text[2]));
                 return;
             }
@@ -320,12 +358,12 @@ static void store_arg (char *text) {
 }
 
 void Execute (ASM *a, char *FileName) {
-    FILE *fp;
     if ((fp = fopen(FileName, "rb")) != NULL) {
         char buf [255];
 
         emit_begin (a);
         while (fgets(buf, sizeof(buf), fp) != NULL) {
+            line++;
             Assemble (a, buf);
             if (erro) break;
         }
@@ -338,6 +376,57 @@ void Execute (ASM *a, char *FileName) {
         else printf ("ERRO: %s\n", ErroGet());
     }
     else printf ("File Not Found: '%s'\n", FileName);
+}
+
+void proc_function (void) {
+    char buf [255];
+    TFunc *func;
+
+    sprintf (func_name, "%s", arg.text[1]);
+
+    if (FuncFind(func_name) != NULL) {
+        Erro ("Function Exist(%s)\n", func_name);
+  return;
+    }
+
+    asm_reset (asm_function);
+    emit_begin (asm_function);
+    while (fgets(buf, sizeof(buf), fp) != NULL) {
+        line++;
+        Assemble (asm_function, buf);
+        if (is_function == 0) break;
+        if (erro) break;
+    }
+    emit_end (asm_function);
+
+    if ((func = (TFunc*)malloc (sizeof(TFunc))) == NULL)
+  return;
+
+    func->name = strdup (func_name);
+    func->proto = strdup ("00");
+    func->type = FUNC_TYPE_COMPILED;
+    func->len = asm_get_len (asm_function);
+    #ifdef WIN32
+    if ((func->code = (UCHAR*)VirtualAlloc(NULL, func->len, MEM_COMMIT, PAGE_READWRITE)) == NULL) {
+        Erro ("Create Function(%s) VirtualAlloc FAILED\n", func_name);
+        return;
+    }
+    #endif
+    #ifdef __linux__
+    if ((func->code = (UCHAR*) malloc (func->len)) == NULL) {
+    //if ((func->code = (UCHAR*)mmap (NULL, func->len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MMAP_ANON, -1, 0)) == MAP_FAILED) {
+        Erro ("Create Function(%s) mmap FAILED\n", func_name);
+        return;
+    }
+    #endif
+
+    asm_code_copy (asm_function, func->code, func->len);
+
+    Set_Executable (func->code, func->len);
+
+    // add on top:
+    func->next = Gfunc;
+    Gfunc = func;
 }
 
 void CreateVarLong (char *name, long value) {
@@ -365,7 +454,6 @@ TFunc *FuncFind (char *name) {
       return lib;
         lib++;
     }
-/*
     // linked list:
     TFunc *func = Gfunc;
     while (func) {
@@ -373,7 +461,6 @@ TFunc *FuncFind (char *name) {
       return func;
         func = func->next;
     }
-*/
     return NULL;
 }
 
@@ -417,17 +504,24 @@ void lib_hello (void) {
 }
 
 void lib_version (void) {
-    printf ("\n---------------------------");
-    #if defined(__x86_64__)
-    printf ("\nSimple Language (64 BITS):\n");
-    #else
-    printf ("\nSimple Language (32 BITS):\n");
+    printf ("__________________________\n");
+    printf ("\nSimple Language:\n");
+
+    #ifdef WIN32
+    printf ("  Windows OS | WIN32\n");
     #endif
-    printf (
-        "  ASM Version: %d.%d.%d\n",
-        ASM_VERSION, ASM_VERSION_SUB, ASM_VERSION_PATCH
-    );
-    printf ("---------------------------\n");
+    #ifdef __linux__
+    printf ("  Linux OS   | __linux__\n");
+    #endif
+
+    #if defined(__x86_64__)
+    printf ("  64 BITS    | __x86_64__\n");
+    #else
+    printf ("  32 BITS    | __x86_32__\n");
+    #endif
+
+    printf ("  ASM JIT Version: %d.%d.%d\n", ASM_VERSION, ASM_VERSION_SUB, ASM_VERSION_PATCH);
+    printf ("__________________________\n\n");
 }
 
 void lib_info (int i) {
@@ -455,15 +549,25 @@ int main (int argc, char **argv) {
     if ((a = asm_new (ASM_DEFAULT_SIZE)) == NULL)
   return -1;
 
+    if ((asm_function = asm_new (ASM_DEFAULT_SIZE)) == NULL)
+  return -1;
+
     #if defined(__x86_64__)
     DefineAdd ("__x86_64__");
     #else
     DefineAdd ("__x86_32__");
     #endif
 
+    #ifdef WIN32
+    DefineAdd ("WIN32");
+    #endif
+    #ifdef __linux__
+    DefineAdd ("__linux__");
+    #endif
+
     if (argc >= 2) {
         Execute (a, argv[1]);
-        printf ("Exiting With Sucess:\n");
+        printf ("\nExiting With Sucess:\n");
     } else {
         printf ("USAGE: %s <file.asm>\n", argv[1]);
     }

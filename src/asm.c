@@ -99,6 +99,31 @@ ASM *asm_new (unsigned int size) {
     return NULL;
 }
 
+void asm_reset (ASM *a) {
+
+    a->p = a->code;
+
+    // reset ASM_label:
+    while (a->label != NULL) {
+        ASM_label *temp = a->label->next;
+        if (a->label->name)
+            free (a->label->name);
+        free (a->label);
+        a->label = temp;
+    }
+    // reset ASM_jump:
+    while (a->jump != NULL) {
+        ASM_jump *temp = a->jump->next;
+        if (a->jump->name)
+            free(a->jump->name);
+        free (a->jump);
+        a->jump = temp;
+    }
+
+    a->label = NULL;
+    a->jump  = NULL;
+}
+
 int asm_set_executable (ASM *a) {
     return Set_Executable (a->code, (a->p - a->code));
 }
@@ -111,6 +136,13 @@ void asm_get_addr (ASM *a, void *ptr) { ///: 32/64 BITS OK
 int asm_get_len (ASM *a) {
     return (a->p - a->code);
 }
+
+void asm_code_copy (ASM *src, UCHAR *dest, unsigned int len) {
+    register int i;
+    for (i = 0; i < len; i++)
+        dest[i] = src->code[i];
+}
+
 
 void asm_label (ASM *a, char *name) {
     if (name) {
@@ -151,8 +183,23 @@ int Set_Executable (void *ptr, unsigned int size) {
         return 1; // erro
     }
 #endif
+/*
 #ifdef __linux__
     if (mprotect((void *)ptr, size, PROT_READ | PROT_EXEC) == -1) {
+        Erro ("ERROR: asm_set_executable() ... NOT FOUND - mprotec()\n");
+        return 1; // erro
+    }
+#endif
+*/
+#ifdef __linux__
+    unsigned long start, end, PageSize;
+
+    PageSize = sysconf (_SC_PAGESIZE);
+    start = (unsigned long)ptr & ~(PageSize - 1);
+    end = (unsigned long)ptr + size;
+    end = (end + PageSize - 1) & ~(PageSize - 1);
+    if (mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
+    //if (mprotect((void *)start, end - start, PROT_READ | PROT_EXEC) == -1) {
         Erro ("ERROR: asm_set_executable() ... NOT FOUND - mprotec()\n");
         return 1; // erro
     }
@@ -249,7 +296,6 @@ void emit_begin (ASM *a) { // 32/64 BITS OK
 
 void emit_end (ASM *a) { // 32/64 BITS OK
     #if defined(__x86_64__)
-//    a->p[0] = 0x5d; // 5d : pop    %ebp
     a->p[0] = 0xc9; // c9 : leaveq
     a->p[1] = 0xc3; // c3 : retq
     a->p += 2;
@@ -266,6 +312,8 @@ void emit_end (ASM *a) { // 32/64 BITS OK
 }
 
 void emit_sub_esp (ASM *a, char c) { // 32/64 BITS OK
+  // 48 83 ec 08          	sub    $0x8,%rsp
+  // 83 ec 08             	sub    $0x8,%esp
     #if defined(__x86_64__)
     g4(a,0x48,0x83,0xec,(char)c); // 48 83 ec   08   sub   $0x8,%rsp
     #else

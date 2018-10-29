@@ -5,7 +5,7 @@ CC   = gcc
 OBJ  = obj/asm.o $(RES)
 LINKOBJ  = obj/asm.o $(RES)
 BIN  = libasm.a
-CFLAGS = -O2 -Wall
+CFLAGS = -Wall
 RM = rm -f
 
 .PHONY: all all-before all-after clean clean-custom

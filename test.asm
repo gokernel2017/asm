@@ -13,28 +13,23 @@
 long a
 long b
 
-#ifdef __x86_32__
-  sub   $16, %esp
-#endif
-
-#ifdef __x86_64__
-  hello
-#endif
-
-label_hello:
-
-//  mov   $1, a
-//  mov   $1500, b
+function version_set_var
+  version
 
   mov   $1, %eax
-  mov   $1500, %edx
+  mov   $1500, %ebx
 
   mov   %eax, a
-  mov   %edx, b
+  mov   %ebx, b
+end
+
+#ifdef __x86_32__
+  sub   $32, %esp
+#endif
+
+  version_set_var
 
   // call function with argument: 1
   //
   info  a
-
-  version
 
