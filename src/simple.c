@@ -60,10 +60,12 @@ TVar Gvar [GVAR_SIZE];
 
 char  *str;
 char  func_name [100];
+char  label_name [100][100];
 
 static int
     line,
     count,
+    level,
     is_function,
     ifndef_true
     ;
@@ -72,6 +74,8 @@ static int
 //-----------------  PROTOTYPES  ----------------
 //-----------------------------------------------
 //
+void op_cmp (ASM *a);
+void op_if  (ASM *a);
 void op_mov (ASM *a);
 void op_sub (ASM *a);
 //
@@ -185,6 +189,12 @@ void Assemble (ASM *a, char *text) {
   return;
     }
 
+    if (arg.tok[0]=='}' && level > 0) { // end if { }
+        asm_label (a, label_name[level]);
+        level--;
+  return;
+    }
+    
     //-------------------------------------------
     // long var
     // function hello_world
@@ -215,7 +225,16 @@ void Assemble (ASM *a, char *text) {
     // Assembly Opcode:
     //-------------------------------------------
     //
-    if (!strcmp(arg.text[0], "mov")) {
+    if (!strcmp(arg.text[0], "cmp")) {
+        op_cmp (a);
+    }
+    else if (!strcmp(arg.text[0], "if")) {
+        op_if(a);
+    }
+    else if (!strcmp(arg.text[0], "jle") && arg.count==2) {
+        emit_jump_jle (a, arg.text[1]);
+    }
+    else if (!strcmp(arg.text[0], "mov")) {
         op_mov (a);
     }
     else if (!strcmp(arg.text[0], "sub")) {
@@ -279,12 +298,88 @@ void proc_ifdef (char *name) {
 
 //-------------------------------------------------------------------
 //
+// cmp  %eax , %ebx
+//
+//-------------------------------------------------------------------
+//
+void op_cmp (ASM *a) {
+    if (arg.count==4) {
+        if (!strcmp(arg.text[1], "%eax") && !strcmp(arg.text[3], "%ebx")) {
+            emit_cmp_eax_ebx (a);
+            return;
+        } else {
+            Erro ("%d: USAGE: cmp %eax, %ebx\n", line);
+            return;
+        }
+
+    }
+    Erro ("%d: '%s'\n", line, arg.string);
+}
+
+//-------------------------------------------------------------------
+//
+// if a > b {
+//
+// }
+//
+//-------------------------------------------------------------------
+//
+void op_if (ASM *a) {
+    int var_a, var_b;
+    if (arg.count == 5 && arg.tok[4]=='{') {
+        static int level_count = 0;
+
+        var_a = VarFind(arg.text[1]);
+        var_b = VarFind(arg.text[3]);
+        
+        // mov   a, %ebx
+        // mov   b, %eax
+
+        if (var_a != -1) {
+            emit_mov_var_reg (a, &Gvar[var_a].value.l, EBX);
+        } else if (arg.tok[1]==TOK_NUMBER) {
+            emit_mov_value_reg (a, atoi(arg.text[1]), EBX);
+        } else {
+            Erro ("%d: USAGE: if a > b {\n", line);
+            return;
+        }
+
+        if (var_b != -1) {
+            emit_mov_var_reg (a, &Gvar[var_b].value.l, EAX);
+        } else if (arg.tok[1]==TOK_NUMBER) {
+            emit_mov_value_reg (a, atoi(arg.text[3]), EAX);
+        } else {
+            Erro ("%d: USAGE: if a > b {\n", line);
+            return;
+        }
+
+        level_count++;
+        level++;
+        sprintf (label_name[level], "block_%d_%d", level_count, level);
+
+        if (arg.tok[2]=='>') {
+            emit_cmp_eax_ebx (a);
+            emit_jump_jle (a, label_name[level]);
+            return;
+        }
+        if (arg.tok[2]=='<') {
+            emit_cmp_eax_ebx (a);
+            emit_jump_jge (a, label_name[level]);
+            return;
+        }
+    }
+    Erro ("%d: IF ERRO ''%s'\n", line, arg.string);
+}
+
+//-------------------------------------------------------------------
+//
 // mov  $ 1000 , var
 // mov  $ 1000 , %eax
 // mov  %eax , var
 // mov  var , %eax
 //
 //-------------------------------------------------------------------
+//
 void op_mov (ASM *a) {
     int i;
     // mov $ 1000 , var
