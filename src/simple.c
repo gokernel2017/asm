@@ -346,7 +346,7 @@ void op_if (ASM *a) {
 
         if (var_b != -1) {
             emit_mov_var_reg (a, &Gvar[var_b].value.l, EAX);
-        } else if (arg.tok[1]==TOK_NUMBER) {
+        } else if (arg.tok[3]==TOK_NUMBER) {
             emit_mov_value_reg (a, atoi(arg.text[3]), EAX);
         } else {
             Erro ("%d: USAGE: if a > b {\n", line);
